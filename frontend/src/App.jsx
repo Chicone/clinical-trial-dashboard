@@ -95,6 +95,10 @@ function App() {
           </select>
         </div>
 
+        <p className="result-count">
+          Showing {filteredTrials.length} of {trials.length} trials
+        </p>
+
         {loading && <p>Loading trials...</p>}
 
         {!loading && (
@@ -197,6 +201,14 @@ function App() {
                     safety, efficacy, and operational features.
                   </p>
                 </div>
+                <a
+                  href={`https://clinicaltrials.gov/study/${selectedTrial.nct_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="external-link"
+                >
+                  View on ClinicalTrials.gov
+                </a>
                 </>
               ) : (
                 <p>Select a clinical trial to view details.</p>
