@@ -22,7 +22,7 @@ def root():
 
 @app.get("/trials")
 def get_trials(
-    condition: str = Query(default="high functioning autism"),
+    condition: str = Query(default="autism"),
     page_size: int = Query(default=50, ge=1, le=100),
 ):
     raw = fetch_trials(condition=condition, page_size=page_size)

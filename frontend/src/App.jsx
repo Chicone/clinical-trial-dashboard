@@ -5,8 +5,10 @@ function App() {
   const [trials, setTrials] = useState([]);
   const [selectedTrial, setSelectedTrial] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [condition, setCondition] = useState("high functioning autism");
-  const [conditionInput, setConditionInput] = useState("high functioning autism");
+  const [condition, setCondition] = useState("autism");
+  const [conditionInput, setConditionInput] = useState("autism");
+  const [phaseFilter, setPhaseFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   useEffect(() => {
       setLoading(true);
@@ -25,21 +27,14 @@ function App() {
     }, [condition]);
 
   const filteredTrials = trials.filter((trial) => {
-      const text = [
-        trial.title,
-        trial.brief_title,
-        trial.status,
-        trial.overall_status,
-        trial.phase,
-        trial.condition,
-        trial.sponsor,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+  const phaseMatches =
+    phaseFilter === "all" || trial.phase === phaseFilter;
 
-      return true;
-    });
+  const statusMatches =
+    statusFilter === "all" || trial.status === statusFilter;
+
+  return phaseMatches && statusMatches;
+});
 
   return (
     <div className="app">
@@ -57,6 +52,11 @@ function App() {
             type="text"
             value={conditionInput}
             onChange={(e) => setConditionInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setCondition(conditionInput);
+              }
+            }}
             placeholder="Search condition, e.g. psoriasis"
           />
 
@@ -68,26 +68,60 @@ function App() {
           </button>
         </div>
 
+        <div className="filter-bar">
+          <select
+            value={phaseFilter}
+            onChange={(e) => setPhaseFilter(e.target.value)}
+          >
+            <option value="all">All phases</option>
+            <option value="PHASE1">Phase 1</option>
+            <option value="PHASE2">Phase 2</option>
+            <option value="PHASE3">Phase 3</option>
+            <option value="PHASE4">Phase 4</option>
+          </select>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All statuses</option>
+            <option value="RECRUITING">Recruiting</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="TERMINATED">Terminated</option>
+            <option value="WITHDRAWN">Withdrawn</option>
+            <option value="ACTIVE_NOT_RECRUITING">
+              Active, not recruiting
+            </option>
+          </select>
+        </div>
+
         {loading && <p>Loading trials...</p>}
 
         {!loading && (
           <div className="layout">
             <section className="trial-list">
-              {filteredTrials.map((trial, index) => (
-                <div
-                  key={trial.ntc_id || index}
-                  className={`trial-card ${
+              {filteredTrials.length === 0 ? (
+                <div className="empty-state">
+                  No trials found. Try another condition or relax the filters.
+                </div>
+              ) : (
+                filteredTrials.map((trial, index) => (
+                  <div
+                    key={trial.nct_id || index}
+                    className={`trial-card ${
                       selectedTrial === trial ? "selected" : ""
                     }`}
                     onClick={() => {
                       console.log(trial);
                       setSelectedTrial(trial);
-                    }}                >
-                  <h3>{trial.title || trial.brief_title || "Untitled trial"}</h3>
-                  <p>{trial.status || trial.overall_status || "No status"}</p>
-                  <p>{trial.phase || "No phase"}</p>
-                </div>
-              ))}
+                    }}
+                  >
+                    <h3>{trial.title || trial.brief_title || "Untitled trial"}</h3>
+                    <p>{trial.status || trial.overall_status || "No status"}</p>
+                    <p>{trial.phase || "No phase"}</p>
+                  </div>
+                ))
+              )}
             </section>
 
             <section className="trial-detail">
