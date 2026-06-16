@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.env
+.venv/
+venv/
+
+# PyCharm
+.idea/
+
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+
+# Build artifacts
+dist/
+build/
+
+# Logs
+*.log
