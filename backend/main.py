@@ -3,6 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ct_io.clinicaltrials_api import fetch_trials
 from pipelines.preprocessing_pipeline import flatten_trials
+from services.trial_storage import (
+    save_raw_trials,
+    save_processed_trials,
+    save_metadata,
+)
 
 app = FastAPI(title="Clinical Trial Dashboard API")
 
@@ -26,7 +31,22 @@ def get_trials(
     page_size: int = Query(default=50, ge=1, le=100),
 ):
     raw = fetch_trials(condition=condition, page_size=page_size)
+    trials = flatten_trials(raw)
+
+    print("RAW STUDIES:", len(raw.get("studies", [])))
+    print("NORMALIZED TRIALS:", len(trials))
+
+    save_raw_trials(raw, f"{condition}_raw_trials.json")
+    save_processed_trials(trials, f"{condition}_trials.json")
+    save_metadata(
+        condition=condition,
+        page_size=page_size,
+        n_raw_studies=len(raw.get("studies", [])),
+        n_processed_trials=len(trials),
+        filename=f"{condition}_metadata.json",
+    )
+
     return {
         "total_count": raw.get("totalCount"),
-        "trials": flatten_trials(raw),
+        "trials": trials,
     }
