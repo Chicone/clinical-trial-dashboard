@@ -152,9 +152,25 @@ without modifying the frontend or machine learning pipelines.
 
 ---
 
-## Getting Started
+## Requirements
 
-### Backend
+* Python 3.11+
+* Node.js 20+
+* Conda (recommended)
+* npm
+
+---
+
+## Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/<your-username>/clinical-trial-dashboard.git
+cd clinical-trial-dashboard
+```
+
+### Backend setup
 
 Create and activate the environment:
 
@@ -163,41 +179,55 @@ conda create -n ctd python=3.11
 conda activate ctd
 ```
 
-Install dependencies:
+Install backend dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
-Run the backend:
+### Frontend setup
+
+Install frontend dependencies:
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+---
+
+## Running the Application
+
+### Start the backend
 
 ```bash
 cd backend
 uvicorn main:app --reload --port 8000
 ```
 
-Open:
+Backend API:
+
+```text
+http://localhost:8000
+```
+
+Interactive API documentation:
 
 ```text
 http://localhost:8000/docs
 ```
 
-### Frontend
+### Start the frontend
 
-Install dependencies:
+Open a new terminal:
 
 ```bash
 cd frontend
-npm install
-```
-
-Start the development server:
-
-```bash
 npm run dev
 ```
 
-Open:
+Frontend:
 
 ```text
 http://localhost:5173
@@ -217,6 +247,19 @@ Force data refresh:
 
 ```text
 GET /trials?condition=autism&refresh=true
+```
+
+---
+
+## Environment Variables
+
+Future versions may require environment variables for external APIs, model endpoints, and database connections.
+
+Create environment files when needed:
+
+```text
+backend/.env
+frontend/.env
 ```
 
 ---
@@ -278,9 +321,37 @@ The goal is to create open datasets, open models, and reproducible benchmarks th
 
 ---
 
+## Contributing
+
+Contributions, suggestions, and feature requests are welcome.
+
+Please open an issue before submitting major changes.
+
+Recommended workflow:
+
+1. Create a feature branch.
+2. Implement changes.
+3. Update documentation.
+4. Submit a pull request.
+
+---
+
+## Citation
+
+If you use this project in research, please cite:
+
+```text
+Gomez Camara, L.
+Clinical Trial Dashboard (CTD):
+A multimodal clinical trial intelligence platform.
+GitHub repository.
+```
+
+---
+
 ## License
 
-TBD
+MIT License
 
 ---
 
