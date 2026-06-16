@@ -81,3 +81,15 @@ def save_metadata(
         json.dump(metadata, f, indent=2, ensure_ascii=False)
 
     return path
+
+def load_processed_trials(filename: str) -> list[dict]:
+    """
+    Load normalized trials from the processed data directory.
+    """
+    path = PROCESSED_V01_DIR / filename
+
+    if not path.exists():
+        return []
+
+    with path.open("r", encoding="utf-8") as f:
+        return json.load(f)

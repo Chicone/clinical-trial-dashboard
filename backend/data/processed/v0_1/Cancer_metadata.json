@@ -1,0 +1,9 @@
+{
+  "source": "clinicaltrials.gov",
+  "condition": "Cancer",
+  "page_size": 50,
+  "retrieved_at": "2026-06-16T16:50:10.696002+00:00",
+  "n_raw_studies": 50,
+  "n_processed_trials": 50,
+  "schema_version": "v0_1"
+}
