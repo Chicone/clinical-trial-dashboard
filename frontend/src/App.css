@@ -277,3 +277,93 @@ body {
   font-size: 15px;
 }
 
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.badge.success {
+  color: #bbf7d0;
+  background: #14532d;
+}
+
+.badge.info {
+  color: #bfdbfe;
+  background: #1e3a8a;
+}
+
+.badge.danger {
+  color: #fecaca;
+  background: #7f1d1d;
+}
+
+.badge.warning {
+  color: #fde68a;
+  background: #78350f;
+}
+
+.badge.neutral {
+  color: #cbd5e1;
+  background: #334155;
+}
+
+.badge.phase {
+  color: #ddd6fe;
+  background: #4c1d95;
+}
+
+.detail-badges .badge{
+  font-size: 15px;
+  margin-bottom: 20px;
+}
+
+.detail-section {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  background: #020617;
+}
+
+.detail-section summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.detail-section {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  background: #020617;
+}
+
+.detail-section summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #f8fafc;
+  list-style-position: outside;
+}
+.detail-section p {
+  width: 100%;
+  max-width: none;
+  margin-top: 12px;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: #cbd5e1;
+}

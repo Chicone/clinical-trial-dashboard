@@ -1,3 +1,5 @@
+from schemas.trial import Trial
+
 def _join(values):
     if not values:
         return None
@@ -6,7 +8,7 @@ def _join(values):
     return str(values)
 
 
-def flatten_study(study: dict) -> dict:
+def normalize_study(study: dict) -> Trial:
     protocol = study.get("protocolSection", {})
 
     identification = protocol.get("identificationModule", {})
@@ -24,34 +26,49 @@ def flatten_study(study: dict) -> dict:
     interventions = arms.get("interventions", [])
     primary_outcomes = outcomes.get("primaryOutcomes", [])
 
-    return {
-        "nct_id": identification.get("nctId"),
-        "title": identification.get("briefTitle"),
-        "official_title": identification.get("officialTitle"),
+    description = protocol.get("descriptionModule", {})
+    contacts_locations = protocol.get("contactsLocationsModule", {})
 
-        "status": status.get("overallStatus"),
-        "start_date": status.get("startDateStruct", {}).get("date"),
-        "completion_date": status.get("completionDateStruct", {}).get("date"),
+    return Trial(
+        source="clinicaltrials.gov",
 
-        "phase": _join(design.get("phases")),
-        "study_type": design.get("studyType"),
-        "enrollment": enrollment_info.get("count"),
-        "enrollment_type": enrollment_info.get("type"),
+        nct_id=identification.get("nctId"),
+        title=identification.get("briefTitle"),
+        official_title=identification.get("officialTitle"),
 
-        "sponsor": lead_sponsor.get("name"),
-        "sponsor_class": lead_sponsor.get("class"),
+        status=status.get("overallStatus"),
+        start_date=status.get("startDateStruct", {}).get("date"),
+        completion_date=status.get("completionDateStruct", {}).get("date"),
 
-        "conditions": _join(conditions.get("conditions")),
-        "interventions": _join([i.get("name") for i in interventions]),
-        "intervention_types": _join([i.get("type") for i in interventions]),
+        phase=_join(design.get("phases")),
+        study_type=design.get("studyType"),
 
-        "primary_outcomes": _join([o.get("measure") for o in primary_outcomes]),
+        enrollment=enrollment_info.get("count"),
 
-        "sex": eligibility.get("sex"),
-        "minimum_age": eligibility.get("minimumAge"),
-        "maximum_age": eligibility.get("maximumAge"),
-    }
+        sponsor=lead_sponsor.get("name"),
+
+        conditions=conditions.get("conditions", []),
+
+        interventions=[
+            i.get("name")
+            for i in interventions
+            if i.get("name")
+        ],
+
+        primary_outcomes=[
+            o.get("measure")
+            for o in primary_outcomes
+            if o.get("measure")
+        ],
+
+        sex=eligibility.get("sex"),
+        minimum_age=eligibility.get("minimumAge"),
+        maximum_age=eligibility.get("maximumAge"),
+
+        brief_summary=description.get("briefSummary"),
+        detailed_description=description.get("detailedDescription"),
+    )
 
 
-def flatten_trials(api_response: dict) -> list[dict]:
-    return [flatten_study(study) for study in api_response.get("studies", [])]
+def flatten_trials(api_response: dict) -> list[Trial]:
+    return [normalize_study(study) for study in api_response.get("studies", [])]

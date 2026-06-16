@@ -9,6 +9,7 @@ function App() {
   const [conditionInput, setConditionInput] = useState("autism");
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("relevance");
 
   useEffect(() => {
       setLoading(true);
@@ -26,15 +27,48 @@ function App() {
         });
     }, [condition]);
 
-  const filteredTrials = trials.filter((trial) => {
-  const phaseMatches =
-    phaseFilter === "all" || trial.phase === phaseFilter;
+    const filteredTrials = trials
+      .filter((trial) => {
+        const phaseMatches =
+          phaseFilter === "all" || trial.phase === phaseFilter;
 
-  const statusMatches =
-    statusFilter === "all" || trial.status === statusFilter;
+        const statusMatches =
+          statusFilter === "all" || trial.status === statusFilter;
 
-  return phaseMatches && statusMatches;
-});
+        return phaseMatches && statusMatches;
+      })
+      .sort((a, b) => {
+        switch (sortBy) {
+          case "enrollment":
+            return (b.enrollment || 0) - (a.enrollment || 0);
+
+          case "start_date":
+            return new Date(b.start_date || 0) -
+                   new Date(a.start_date || 0);
+
+          case "recruiting":
+            return (
+              (b.status === "RECRUITING") -
+              (a.status === "RECRUITING")
+            );
+
+          default:
+            return 0;
+        }
+      });
+
+  const getStatusClass = (status) => {
+    if (!status) return "badge neutral";
+
+    const value = status.toLowerCase();
+
+    if (value.includes("recruiting")) return "badge success";
+    if (value.includes("completed")) return "badge info";
+    if (value.includes("terminated")) return "badge danger";
+    if (value.includes("withdrawn")) return "badge warning";
+
+    return "badge neutral";
+  };
 
   return (
     <div className="app">
@@ -93,6 +127,17 @@ function App() {
               Active, not recruiting
             </option>
           </select>
+
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="relevance">Relevance</option>
+            <option value="start_date">Newest start date</option>
+            <option value="enrollment">Largest enrollment</option>
+            <option value="recruiting">Recruiting first</option>
+          </select>
+
         </div>
 
         <p className="result-count">
@@ -121,8 +166,15 @@ function App() {
                     }}
                   >
                     <h3>{trial.title || trial.brief_title || "Untitled trial"}</h3>
-                    <p>{trial.status || trial.overall_status || "No status"}</p>
-                    <p>{trial.phase || "No phase"}</p>
+                    <div className="badge-row">
+                      <span className={getStatusClass(trial.status)}>
+                        {trial.status || "No status"}
+                      </span>
+
+                      <span className="badge phase">
+                        {trial.phase || "No phase"}
+                      </span>
+                    </div>
                   </div>
                 ))
               )}
@@ -132,6 +184,16 @@ function App() {
               {selectedTrial ? (
                 <>
                   <h2>{selectedTrial.title}</h2>
+
+                  <div className="badge-row detail-badges">
+                  <span className={getStatusClass(selectedTrial.status)}>
+                    {selectedTrial.status || "No status"}
+                  </span>
+
+                  <span className="badge phase">
+                    {selectedTrial.phase || "No phase"}
+                  </span>
+                </div>
 
                  <div className="detail-grid">
                   <div className="detail-label">ID</div>
@@ -171,7 +233,23 @@ function App() {
                   <div className="detail-value">
                     {selectedTrial.minimum_age} - {selectedTrial.maximum_age}
                   </div>
+
                 </div>
+
+                <details className="detail-section">
+                  <summary>Summary</summary>
+                  <p>{selectedTrial.brief_summary || "No summary available."}</p>
+                </details>
+
+                <details className="detail-section">
+                  <summary>Eligibility Criteria</summary>
+                  <p>{selectedTrial.eligibility_criteria || "No eligibility criteria available."}</p>
+                </details>
+
+                <details className="detail-section">
+                  <summary>Locations</summary>
+                  <p>{selectedTrial.locations || "No locations available."}</p>
+                </details>
 
                   <p>{selectedTrial.primary_outcomes}</p>
 
