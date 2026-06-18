@@ -29,7 +29,7 @@ def root():
 @app.get("/trials")
 def get_trials(
     condition: str = Query(default="autism"),
-    page_size: int = Query(default=50, ge=1, le=100),
+    page_size: int = Query(default=100, ge=1, le=1000),
     refresh: bool = Query(default=False),
 ):
     processed_filename = f"{condition}_trials.json"

@@ -10,52 +10,60 @@ function App() {
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("relevance");
+  const [pageSize, setPageSize] = useState(100);
 
   useEffect(() => {
-      setLoading(true);
-      setSelectedTrial(null);
-      fetch(`http://localhost:8000/trials?condition=${encodeURIComponent(condition)}`)
-        .then((res) => res.json())
-        .then((data) => {
-          console.log("Backend data:", data);
-          setTrials(data.trials || []);
-          setLoading(false);
-        })
-        .catch((err) => {
-          console.error("Failed to load clinical trials:", err);
-          setLoading(false);
-        });
-    }, [condition]);
+    setLoading(true);
+    setSelectedTrial(null);
 
-    const filteredTrials = trials
-      .filter((trial) => {
-        const phaseMatches =
-          phaseFilter === "all" || trial.phase === phaseFilter;
-
-        const statusMatches =
-          statusFilter === "all" || trial.status === statusFilter;
-
-        return phaseMatches && statusMatches;
+    fetch(
+      `http://localhost:8000/trials?condition=${encodeURIComponent(
+        condition
+      )}&page_size=${pageSize}&refresh=true`
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("Backend data:", data);
+        setTrials(data.trials || []);
+        setLoading(false);
       })
-      .sort((a, b) => {
-        switch (sortBy) {
-          case "enrollment":
-            return (b.enrollment || 0) - (a.enrollment || 0);
-
-          case "start_date":
-            return new Date(b.start_date || 0) -
-                   new Date(a.start_date || 0);
-
-          case "recruiting":
-            return (
-              (b.status === "RECRUITING") -
-              (a.status === "RECRUITING")
-            );
-
-          default:
-            return 0;
-        }
+      .catch((err) => {
+        console.error("Failed to load clinical trials:", err);
+        setLoading(false);
       });
+  }, [condition, pageSize]);
+
+  const filteredTrials = trials
+    .filter((trial) => {
+      const phaseMatches =
+        phaseFilter === "all" || trial.phase === phaseFilter;
+
+      const statusMatches =
+        statusFilter === "all" || trial.status === statusFilter;
+
+      return phaseMatches && statusMatches;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case "enrollment":
+          return (b.enrollment || 0) - (a.enrollment || 0);
+
+        case "start_date":
+          return (
+            new Date(b.start_date || 0) -
+            new Date(a.start_date || 0)
+          );
+
+        case "recruiting":
+          return (
+            (b.status === "RECRUITING") -
+            (a.status === "RECRUITING")
+          );
+
+        default:
+          return 0;
+      }
+    });
 
   const getStatusClass = (status) => {
     if (!status) return "badge neutral";
@@ -80,6 +88,7 @@ function App() {
 
       <main className="main">
         <h1>Clinical Trials</h1>
+
         <div className="search-bar">
           <input
             className="search-input"
@@ -94,6 +103,15 @@ function App() {
             placeholder="Search condition, e.g. psoriasis"
           />
 
+          <input
+            className="page-size-input"
+            type="number"
+            min="1"
+            max="1000"
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            placeholder="Trials"
+          />
           <button
             className="search-button"
             onClick={() => setCondition(conditionInput)}
@@ -137,7 +155,6 @@ function App() {
             <option value="enrollment">Largest enrollment</option>
             <option value="recruiting">Recruiting first</option>
           </select>
-
         </div>
 
         <p className="result-count">
@@ -165,7 +182,10 @@ function App() {
                       setSelectedTrial(trial);
                     }}
                   >
-                    <h3>{trial.title || trial.brief_title || "Untitled trial"}</h3>
+                    <h3>
+                      {trial.title || trial.brief_title || "Untitled trial"}
+                    </h3>
+
                     <div className="badge-row">
                       <span className={getStatusClass(trial.status)}>
                         {trial.status || "No status"}
@@ -186,107 +206,159 @@ function App() {
                   <h2>{selectedTrial.title}</h2>
 
                   <div className="badge-row detail-badges">
-                  <span className={getStatusClass(selectedTrial.status)}>
-                    {selectedTrial.status || "No status"}
-                  </span>
+                    <span className={getStatusClass(selectedTrial.status)}>
+                      {selectedTrial.status || "No status"}
+                    </span>
 
-                  <span className="badge phase">
-                    {selectedTrial.phase || "No phase"}
-                  </span>
-                </div>
-
-                 <div className="detail-grid">
-                  <div className="detail-label">ID</div>
-                  <div className="detail-value">{selectedTrial.nct_id}</div>
-
-                  <div className="detail-label">Status</div>
-                  <div className="detail-value">{selectedTrial.status}</div>
-
-                  <div className="detail-label">Phase</div>
-                  <div className="detail-value">{selectedTrial.phase}</div>
-
-                  <div className="detail-label">Study Type</div>
-                  <div className="detail-value">{selectedTrial.study_type}</div>
-
-                  <div className="detail-label">Sponsor</div>
-                  <div className="detail-value">{selectedTrial.sponsor}</div>
-
-                  <div className="detail-label">Condition</div>
-                  <div className="detail-value">{selectedTrial.conditions}</div>
-
-                  <div className="detail-label">Interventions</div>
-                  <div className="detail-value">{selectedTrial.interventions}</div>
-
-                  <div className="detail-label">Enrollment</div>
-                  <div className="detail-value">{selectedTrial.enrollment}</div>
-
-                  <div className="detail-label">Start Date</div>
-                  <div className="detail-value">{selectedTrial.start_date}</div>
-
-                  <div className="detail-label">Completion Date</div>
-                  <div className="detail-value">{selectedTrial.completion_date}</div>
-
-                  <div className="detail-label">Sex</div>
-                  <div className="detail-value">{selectedTrial.sex}</div>
-
-                  <div className="detail-label">Age Range</div>
-                  <div className="detail-value">
-                    {selectedTrial.minimum_age} - {selectedTrial.maximum_age}
+                    <span className="badge phase">
+                      {selectedTrial.phase || "No phase"}
+                    </span>
                   </div>
-
-                </div>
-
-                <details className="detail-section">
-                  <summary>Summary</summary>
-                  <p>{selectedTrial.brief_summary || "No summary available."}</p>
-                </details>
-
-                <details className="detail-section">
-                  <summary>Eligibility Criteria</summary>
-                  <p>{selectedTrial.eligibility_criteria || "No eligibility criteria available."}</p>
-                </details>
-
-                <details className="detail-section">
-                  <summary>Locations</summary>
-                  <p>{selectedTrial.locations || "No locations available."}</p>
-                </details>
-
-                  <p>{selectedTrial.primary_outcomes}</p>
 
                   <div className="risk-panel">
+                   <h3 className="panel-title">Risk Assessment</h3>
 
-                  <h3>Risk Assessment</h3>
+                    <div className="risk-grid">
+                      <div>
+                        <span>Safety</span>
+                        <strong>N/A</strong>
+                      </div>
 
-                  <div className="risk-grid">
-                    <div>
-                      <span>Safety</span>
-                      <strong>N/A</strong>
+                      <div>
+                        <span>Efficacy</span>
+                        <strong>N/A</strong>
+                      </div>
+
+                      <div>
+                        <span>Operational</span>
+                        <strong
+                          style={{
+                            color:
+                              selectedTrial.operational_risk === 1
+                                ? "#dc2626"
+                                : "#16a34a",
+                          }}
+                        >
+                          {selectedTrial.operational_risk === 1
+                            ? "High"
+                            : "Low"}
+                        </strong>
+                      </div>
                     </div>
 
-                    <div>
-                      <span>Efficacy</span>
-                      <strong>N/A</strong>
-                    </div>
-
-                    <div>
-                      <span>Operational</span>
-                      <strong>N/A</strong>
-                    </div>
+                    <p className="risk-note">
+                      Operational risk is currently derived from trial status.
+                      Safety and efficacy models are under development.
+                    </p>
                   </div>
 
-                  <p className="risk-note">
-                    Risk models will be connected later using protocol, intervention,
-                    safety, efficacy, and operational features.
-                  </p>
+              <div className="detail-panel">
+                <h3 className="panel-title">Trial Details</h3>
+                  <div className="detail-grid">
+                    <div className="detail-label">ID</div>
+                    <div className="detail-value">
+                      {selectedTrial.nct_id}
+                    </div>
+
+                    <div className="detail-label">Status</div>
+                    <div className="detail-value">
+                      {selectedTrial.status}
+                    </div>
+
+                    <div className="detail-label">Phase</div>
+                    <div className="detail-value">
+                      {selectedTrial.phase}
+                    </div>
+
+                    <div className="detail-label">Study Type</div>
+                    <div className="detail-value">
+                      {selectedTrial.study_type}
+                    </div>
+
+                    <div className="detail-label">Sponsor</div>
+                    <div className="detail-value">
+                      {selectedTrial.sponsor}
+                    </div>
+
+                    <div className="detail-label">Condition</div>
+                    <div className="detail-value">
+                      {selectedTrial.conditions}
+                    </div>
+
+                    <div className="detail-label">Interventions</div>
+                    <div className="detail-value">
+                      {selectedTrial.interventions}
+                    </div>
+
+                    <div className="detail-label">Enrollment</div>
+                    <div className="detail-value">
+                      {selectedTrial.enrollment}
+                    </div>
+
+                    <div className="detail-label">Start Date</div>
+                    <div className="detail-value">
+                      {selectedTrial.start_date}
+                    </div>
+
+                    <div className="detail-label">Completion Date</div>
+                    <div className="detail-value">
+                      {selectedTrial.completion_date}
+                    </div>
+
+                    <div className="detail-label">Sex</div>
+                    <div className="detail-value">
+                      {selectedTrial.sex}
+                    </div>
+
+                    <div className="detail-label">Age Range</div>
+                    <div className="detail-value">
+                      {selectedTrial.minimum_age} -{" "}
+                      {selectedTrial.maximum_age}
+                    </div>
+                  </div>
                 </div>
-                <a
-                  href={`https://clinicaltrials.gov/study/${selectedTrial.nct_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="external-link"
-                >
-                  View on ClinicalTrials.gov
-                </a>
+
+
+                  <details className="detail-section">
+                    <summary>Summary</summary>
+                    <p>
+                      {selectedTrial.brief_summary ||
+                        "No summary available."}
+                    </p>
+                  </details>
+
+                  <details className="detail-section">
+                    <summary>Eligibility Criteria</summary>
+                    <p>
+                      {selectedTrial.eligibility_criteria ||
+                        "No eligibility criteria available."}
+                    </p>
+                  </details>
+
+                  <details className="detail-section">
+                    <summary>Locations</summary>
+                    <p>
+                      {selectedTrial.locations ||
+                        "No locations available."}
+                    </p>
+                  </details>
+
+                  <details className="detail-section">
+                    <summary>Primary Outcomes</summary>
+                    <p>
+                      {selectedTrial.primary_outcomes ||
+                        "No primary outcomes available."}
+                    </p>
+                  </details>
+
+                  <a
+                    href={`https://clinicaltrials.gov/study/${selectedTrial.nct_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="external-link"
+                  >
+                    View on ClinicalTrials.gov
+                  </a>
                 </>
               ) : (
                 <p>Select a clinical trial to view details.</p>

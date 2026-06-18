@@ -1,5 +1,11 @@
 from schemas.trial import Trial
 
+HIGH_OPERATIONAL_RISK_STATUSES = {
+    "TERMINATED",
+    "WITHDRAWN",
+    "SUSPENDED",
+}
+
 def _join(values):
     if not values:
         return None
@@ -13,6 +19,7 @@ def normalize_study(study: dict) -> Trial:
 
     identification = protocol.get("identificationModule", {})
     status = protocol.get("statusModule", {})
+    trial_status = status.get("overallStatus")
     design = protocol.get("designModule", {})
     sponsor = protocol.get("sponsorCollaboratorsModule", {})
     conditions = protocol.get("conditionsModule", {})
@@ -36,7 +43,8 @@ def normalize_study(study: dict) -> Trial:
         title=identification.get("briefTitle"),
         official_title=identification.get("officialTitle"),
 
-        status=status.get("overallStatus"),
+        status=trial_status,
+        operational_risk=int(trial_status in HIGH_OPERATIONAL_RISK_STATUSES),
         start_date=status.get("startDateStruct", {}).get("date"),
         completion_date=status.get("completionDateStruct", {}).get("date"),
 
