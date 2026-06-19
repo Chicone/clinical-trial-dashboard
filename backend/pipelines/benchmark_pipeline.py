@@ -4,10 +4,16 @@ from datetime import datetime
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
+RAW_DIR = DATA_DIR / "raw" / "clinicaltrials_gov"
 
 PROCESSED_DIR = DATA_DIR / "processed" / "v0_1"
 BENCHMARK_DIR = DATA_DIR / "benchmarks" / "v0_1"
 
+def load_raw_trials(filename: str) -> dict:
+    path = RAW_DIR / filename
+
+    with path.open("r", encoding="utf-8") as f:
+        return json.load(f)
 
 def load_processed_trials(filename: str) -> list[dict]:
     path = PROCESSED_DIR / filename
@@ -111,6 +117,53 @@ def save_benchmark_metadata(
 
     return path
 
+def _join(values):
+    if not values:
+        return None
+    if isinstance(values, list):
+        return ", ".join(str(v) for v in values if v)
+    return str(values)
+
+def build_safety_risk_benchmark(studies: list[dict]) -> list[dict]:
+    benchmark = []
+
+    for study in studies:
+        if not study.get("hasResults"):
+            continue
+
+        protocol = study.get("protocolSection", {})
+        results = study.get("resultsSection", {})
+
+        identification = protocol.get("identificationModule", {})
+        design = protocol.get("designModule", {})
+        sponsor = protocol.get("sponsorCollaboratorsModule", {})
+        conditions = protocol.get("conditionsModule", {})
+        arms = protocol.get("armsInterventionsModule", {})
+        adverse = results.get("adverseEventsModule", {})
+
+        serious_total = sum(
+            int(group.get("seriousNumAffected", 0) or 0)
+            for group in adverse.get("eventGroups", [])
+        )
+
+        benchmark.append({
+            "nct_id": identification.get("nctId"),
+            "phase": _join(design.get("phases")),
+            "study_type": design.get("studyType"),
+            "sponsor": sponsor.get("leadSponsor", {}).get("name"),
+            "enrollment": design.get("enrollmentInfo", {}).get("count"),
+            "conditions": conditions.get("conditions", []),
+            "interventions": [
+                item.get("name")
+                for item in arms.get("interventions", [])
+                if item.get("name")
+            ],
+            "serious_adverse_events": serious_total,
+            "target": int(serious_total > 0),
+        })
+
+    return benchmark
+
 if __name__ == "__main__":
     conditions = [
         "autism",
@@ -123,7 +176,12 @@ if __name__ == "__main__":
         "parkinsons",
     ]
 
-    all_examples = []
+    # ------------------------------------------------------------
+    # Operational risk benchmark
+    # Uses processed normalized Trial objects.
+    # ------------------------------------------------------------
+
+    operational_examples = []
 
     for condition in conditions:
         filename = f"{condition}_trials.json"
@@ -131,7 +189,7 @@ if __name__ == "__main__":
         try:
             trials = load_processed_trials(filename)
         except FileNotFoundError:
-            print(f"Skipping {condition}: {filename} not found")
+            print(f"Skipping operational benchmark for {condition}")
             continue
 
         benchmark = build_operational_risk_benchmark(trials)
@@ -139,41 +197,93 @@ if __name__ == "__main__":
         for row in benchmark:
             row["source_condition"] = condition
 
-        all_examples.extend(benchmark)
+        operational_examples.extend(benchmark)
 
-    output_path = save_benchmark(
-        all_examples,
+    operational_output_path = save_benchmark(
+        operational_examples,
         "operational_risk_multi_condition.json",
     )
 
-    n_positive = sum(
-        row["target"] == 1
-        for row in all_examples
-    )
-
-    n_negative = len(all_examples) - n_positive
-
-    print(f"Saved benchmark to: {output_path}")
-    print(f"Number of examples: {len(all_examples)}")
-    print(f"High risk: {n_positive}")
-    print(f"Low risk: {n_negative}")
-
-    if all_examples:
-        print(
-            f"Positive ratio: "
-            f"{n_positive / len(all_examples):.2%}"
-        )
-
-    output_path = save_benchmark(
-        all_examples,
-        "operational_risk_multi_condition.json",
-    )
-
-    metadata_path = save_benchmark_metadata(
-        all_examples,
+    operational_metadata_path = save_benchmark_metadata(
+        operational_examples,
         "operational_risk_multi_condition_metadata.json",
         task_name="operational_risk",
     )
 
-    print(f"Saved metadata to: {metadata_path}")
+    n_operational_positive = sum(
+        row["target"] == 1
+        for row in operational_examples
+    )
+
+    print("\nOperational risk benchmark")
+    print(f"Saved benchmark to: {operational_output_path}")
+    print(f"Saved metadata to: {operational_metadata_path}")
+    print(f"Examples: {len(operational_examples)}")
+    print(f"High risk: {n_operational_positive}")
+    print(
+        f"Low risk: "
+        f"{len(operational_examples) - n_operational_positive}"
+    )
+
+    if operational_examples:
+        print(
+            f"Positive ratio: "
+            f"{n_operational_positive / len(operational_examples):.2%}"
+        )
+
+    # ------------------------------------------------------------
+    # Safety risk benchmark
+    # Uses raw ClinicalTrials.gov studies with posted results.
+    # ------------------------------------------------------------
+
+    safety_examples = []
+
+    for condition in conditions:
+        filename = f"{condition}_raw_trials.json"
+
+        try:
+            raw_data = load_raw_trials(filename)
+        except FileNotFoundError:
+            print(f"Skipping safety benchmark for {condition}")
+            continue
+
+        benchmark = build_safety_risk_benchmark(
+            raw_data.get("studies", [])
+        )
+
+        for row in benchmark:
+            row["source_condition"] = condition
+
+        safety_examples.extend(benchmark)
+
+    safety_output_path = save_benchmark(
+        safety_examples,
+        "safety_risk_multi_condition.json",
+    )
+
+    safety_metadata_path = save_benchmark_metadata(
+        safety_examples,
+        "safety_risk_multi_condition_metadata.json",
+        task_name="safety_risk",
+    )
+
+    n_safety_positive = sum(
+        row["target"] == 1
+        for row in safety_examples
+    )
+
+    print("\nSafety risk benchmark")
+    print(f"Saved benchmark to: {safety_output_path}")
+    print(f"Saved metadata to: {safety_metadata_path}")
+    print(f"Examples: {len(safety_examples)}")
+    print(f"High risk: {n_safety_positive}")
+    print(f"Low risk: {len(safety_examples) - n_safety_positive}")
+
+    if safety_examples:
+        print(
+            f"Positive ratio: "
+            f"{n_safety_positive / len(safety_examples):.2%}"
+        )
+
+
 

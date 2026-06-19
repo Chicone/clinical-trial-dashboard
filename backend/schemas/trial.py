@@ -48,3 +48,14 @@ class Trial(BaseModel):
     # Future embeddings / multimodal features
     protocol_embedding_id: Optional[str] = None
     molecular_graph_id: Optional[str] = None
+
+    # Results / stopping information
+    has_results: Optional[bool] = None
+    why_stopped: Optional[str] = None
+
+    # Safety signals
+    serious_adverse_events: Optional[int] = None
+    other_adverse_events: Optional[int] = None
+
+    # Efficacy signals
+    primary_outcome_results: list[str] = Field(default_factory=list)

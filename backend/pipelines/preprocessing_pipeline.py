@@ -36,6 +36,12 @@ def normalize_study(study: dict) -> Trial:
     description = protocol.get("descriptionModule", {})
     contacts_locations = protocol.get("contactsLocationsModule", {})
 
+    results = study.get("resultsSection", {})
+    status = protocol.get("statusModule", {})
+    why_stopped = status.get("whyStopped"),
+    has_results = bool(results),
+
+
     return Trial(
         source="clinicaltrials.gov",
 
