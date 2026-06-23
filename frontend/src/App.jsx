@@ -51,11 +51,35 @@ const [benchmarkResult, setBenchmarkResult] = useState(null);
 const [selectedModel, setSelectedModel] =
   useState("logistic_regression");
 
+const [selectedDataset, setSelectedDataset] =
+  useState("operational_risk_multi_condition");
+
+const [selectedRiskType, setSelectedRiskType] =
+  useState("operational_risk");
+
+const [availableBenchmarks, setAvailableBenchmarks] = useState([]);
+const [selectedBenchmark, setSelectedBenchmark] = useState("");
+
 // Training state and results
 const [trainingResults, setTrainingResults] = useState(null);
 const [training, setTraining] = useState(false);
-const [selectedBenchmark, setSelectedBenchmark] =
-  useState("operational_risk_multi_condition");
+
+useEffect(() => {
+  fetch("http://localhost:8000/benchmarks")
+    .then((res) => res.json())
+    .then((data) => {
+      const benchmarks = data.benchmarks || [];
+
+      setAvailableBenchmarks(benchmarks);
+
+      if (benchmarks.length > 0) {
+        setSelectedBenchmark(benchmarks[0].id);
+      }
+    })
+    .catch((err) => {
+      console.error("Failed to load benchmarks:", err);
+    });
+}, []);
 
   useEffect(() => {
     setLoading(true);
@@ -188,28 +212,43 @@ const [selectedBenchmark, setSelectedBenchmark] =
   };
 
   const trainModel = () => {
-    setTraining(true);
+      if (!selectedBenchmark) {
+        console.error("No benchmark selected");
+        return;
+      }
 
-    fetch("http://localhost:8000/models/train", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        benchmark: selectedBenchmark,
-        model: selectedModel,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setTrainingResults(data);
-        setTraining(false);
+      setTraining(true);
+
+      fetch("http://localhost:8000/models/train", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          benchmark: selectedBenchmark,
+          risk_type: selectedRiskType,
+          model: selectedModel,
+        }),
       })
-      .catch((err) => {
-        console.error(err);
-        setTraining(false);
-      });
-  };
+        .then(async (res) => {
+          const data = await res.json();
+
+          if (!res.ok) {
+            throw new Error(data.detail || "Training failed");
+          }
+
+          return data;
+        })
+        .then((data) => {
+          setTrainingResults(data);
+          setTraining(false);
+        })
+        .catch((err) => {
+          console.error(err);
+          alert(err.message);
+          setTraining(false);
+        });
+    };
 
   return (
     <div className="app">
@@ -632,53 +671,61 @@ const [selectedBenchmark, setSelectedBenchmark] =
 
             <section className="placeholder-panel">
 
-                <div className="model-lab-toolbar">
-                  <div className="control-group">
-                    <label>Benchmark</label>
+<div className="model-lab-toolbar">
+  <div className="control-group">
+    <label>Benchmark</label>
 
-                    <select
-                      value={selectedBenchmark}
-                      onChange={(e) => setSelectedBenchmark(e.target.value)}
-                    >
-                      <option value="operational_risk_multi_condition">
-                        Operational Risk
-                      </option>
+    <select
+      value={selectedBenchmark}
+      onChange={(e) => setSelectedBenchmark(e.target.value)}
+      disabled={availableBenchmarks.length === 0}
+    >
+      {availableBenchmarks.length === 0 ? (
+        <option value="">No benchmarks available</option>
+      ) : (
+        availableBenchmarks.map((benchmark) => (
+          <option key={benchmark.id} value={benchmark.id}>
+            {benchmark.name}
+          </option>
+        ))
+      )}
+    </select>
+  </div>
 
-                      <option value="safety_risk_multi_condition">
-                        Safety Risk
-                      </option>
-                    </select>
-                  </div>
+  <div className="control-group">
+    <label>Risk Type</label>
 
-                  <div className="control-group">
-                    <label>Model</label>
+    <select
+      value={selectedRiskType}
+      onChange={(e) => setSelectedRiskType(e.target.value)}
+    >
+      <option value="operational_risk">Operational Risk</option>
+      <option value="safety_risk">Safety Risk</option>
+      <option value="efficacy_risk">Efficacy Risk</option>
+    </select>
+  </div>
 
-                    <select
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                    >
-                      <option value="logistic_regression">
-                        Logistic Regression
-                      </option>
+  <div className="control-group">
+    <label>Model</label>
 
-                      <option value="random_forest">
-                        Random Forest
-                      </option>
+    <select
+      value={selectedModel}
+      onChange={(e) => setSelectedModel(e.target.value)}
+    >
+      <option value="logistic_regression">Logistic Regression</option>
+      <option value="random_forest">Random Forest</option>
+      <option value="gradient_boosting">Gradient Boosting</option>
+    </select>
+  </div>
 
-                      <option value="gradient_boosting">
-                        Gradient Boosting
-                      </option>
-                    </select>
-                  </div>
-
-                  <button
-                    className="train-button"
-                    onClick={trainModel}
-                    disabled={training}
-                  >
-                    {training ? "Training..." : "Train Model"}
-                  </button>
-                </div>
+  <button
+    className="train-button"
+    onClick={trainModel}
+    disabled={training || !selectedBenchmark}
+  >
+    {training ? "Training..." : "Train Model"}
+  </button>
+</div>
 
               {trainingResults && (
                 <div className="benchmark-result">
@@ -687,7 +734,7 @@ const [selectedBenchmark, setSelectedBenchmark] =
                   <div className="metric-card">
                     <span className="metric-title">Precision</span>
                     <strong className="metric-value">
-                      {trainingResults.precision.toFixed(3)}
+                      {trainingResults.precision?.toFixed(3) ?? "N/A"}
                     </strong>
                     <small className="metric-help">False alarms ↓</small>
                   </div>
@@ -695,7 +742,7 @@ const [selectedBenchmark, setSelectedBenchmark] =
                   <div className="metric-card">
                     <span className="metric-title">Recall</span>
                     <strong className="metric-value">
-                      {trainingResults.recall.toFixed(3)}
+                      {trainingResults.recall?.toFixed(3) ?? "N/A"}
                     </strong>
                     <small className="metric-help">Risks found ↑</small>
                   </div>
@@ -703,7 +750,7 @@ const [selectedBenchmark, setSelectedBenchmark] =
                   <div className="metric-card">
                     <span className="metric-title">F1</span>
                     <strong className="metric-value">
-                      {trainingResults.f1.toFixed(3)}
+                      {trainingResults.f1?.toFixed(3) ?? "N/A"}
                     </strong>
                     <small className="metric-help">Precision-recall balance</small>
                   </div>
@@ -711,7 +758,7 @@ const [selectedBenchmark, setSelectedBenchmark] =
                   <div className="metric-card">
                     <span className="metric-title">MCC</span>
                     <strong className="metric-value">
-                      {trainingResults.mcc.toFixed(3)}
+                      {trainingResults.mcc?.toFixed(3) ?? "N/A"}
                     </strong>
                     <small className="metric-help">Overall signal</small>
                   </div>
@@ -719,7 +766,7 @@ const [selectedBenchmark, setSelectedBenchmark] =
                   <div className="metric-card">
                     <span className="metric-title">PR-AUC</span>
                     <strong className="metric-value">
-                      {trainingResults.pr_auc.toFixed(3)}
+                      {trainingResults.pr_auc?.toFixed(3) ?? "N/A"}
                     </strong>
                     <small className="metric-help">Minority-class performance</small>
                   </div>
@@ -727,7 +774,7 @@ const [selectedBenchmark, setSelectedBenchmark] =
                   <div className="metric-card">
                     <span className="metric-title">ROC-AUC</span>
                     <strong className="metric-value">
-                      {trainingResults.roc_auc.toFixed(3)}
+                      {trainingResults.roc_auc?.toFixed(3) ?? "N/A"}
                     </strong>
                     <small className="metric-help">Ranking ability</small>
                   </div>

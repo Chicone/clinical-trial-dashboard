@@ -58,23 +58,65 @@ The CTD serves as both:
 
 ---
 
-## Architecture
+## Dashboard Preview
 
-```text
-ClinicalTrials.gov API
-        ↓
-Raw data storage
-        ↓
-Trial normalization
-        ↓
-Processed datasets
-        ↓
-Metadata generation
-        ↓
-Dashboard / Analytics / AI
-```
+The Clinical Trial Dashboard provides an interactive interface for
+exploring clinical trial datasets, inspecting study details, and
+supporting future AI-driven clinical trial analysis.
+
+### Clinical Trial Explorer
+
+![Clinical Trial Explorer](docs/images/trial_explorer.png)
+
+Interactive exploration of clinical trials with filtering by
+condition, status, phase, sponsor, and other metadata.
+
+### Trial Details View
+
+![Trial Details View](docs/images/trial_details.png)
+
+Detailed inspection of trial information, including study design,
+interventions, eligibility criteria, outcomes, and investigator
+information.
+
+### Benchmark Builder
+
+![Benchmark Builder](docs/images/benchmark_builder.png)
+
+Creation of unified benchmark datasets for clinical trial risk
+prediction. The benchmark builder supports automated data
+collection, preprocessing, label generation, and benchmark
+statistics reporting.
+
+### Model Lab
+
+![Model Lab](docs/images/model_lab.png)
+
+Training and evaluation of machine-learning models on selected
+benchmarks and risk prediction tasks, including performance
+metrics and confusion matrix analysis.
 
 ---
+
+## Architecture
+
+The CTD follows a modular pipeline that separates data ingestion,
+normalization, storage, and downstream analytics. This design
+ensures reproducibility, extensibility, and compatibility with
+future machine learning workflows.
+
+![CTD Architecture](docs/images/CTD_architecture.png)
+
+### Key Design Principles
+
+- **Modular**: Each component can be developed and replaced independently.
+- **Reproducible**: Raw data and transformations are preserved and tracked.
+- **Extensible**: New datasets and models can be integrated easily.
+- **AI-Ready**: Standardized datasets support machine learning research.
+
+The architecture is designed to support both current dashboard
+functionality and future multimodal AI pipelines for clinical
+trial risk assessment.
 
 ## Project Structure
 
