@@ -117,6 +117,65 @@ def save_benchmark_metadata(
 
     return path
 
+def save_unified_benchmark_metadata(
+    benchmark: list[dict],
+    filename: str,
+) -> Path:
+    n_examples = len(benchmark)
+
+    risk_columns = [
+        "operational_risk",
+        "safety_risk",
+        "efficacy_risk",
+    ]
+
+    label_stats = {}
+
+    for column in risk_columns:
+        valid_rows = [
+            row for row in benchmark
+            if row.get(column) is not None
+        ]
+
+        n_valid = len(valid_rows)
+        n_positive = sum(row[column] == 1 for row in valid_rows)
+        n_negative = n_valid - n_positive
+
+        label_stats[column] = {
+            "n_valid": n_valid,
+            "n_positive": n_positive,
+            "n_negative": n_negative,
+            "positive_ratio": (
+                round(n_positive / n_valid, 4)
+                if n_valid
+                else None
+            ),
+        }
+
+    metadata = {
+        "task": "unified_risk",
+        "created_at": datetime.now().isoformat(),
+        "n_examples": n_examples,
+        "risk_columns": risk_columns,
+        "label_stats": label_stats,
+        "features": [
+            "phase",
+            "study_type",
+            "status",
+            "sponsor",
+            "enrollment",
+            "conditions",
+            "interventions",
+        ],
+    }
+
+    path = BENCHMARK_DIR / filename
+
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+    return path
+
 def _join(values):
     if not values:
         return None
@@ -164,6 +223,47 @@ def build_safety_risk_benchmark(studies: list[dict]) -> list[dict]:
 
     return benchmark
 
+
+def build_unified_risk_benchmark(
+    operational_rows: list[dict],
+    safety_rows: list[dict],
+) -> list[dict]:
+    safety_by_nct_id = {
+        row["nct_id"]: row
+        for row in safety_rows
+        if row.get("nct_id")
+    }
+
+    unified = []
+
+    for row in operational_rows:
+        nct_id = row.get("nct_id")
+        safety_row = safety_by_nct_id.get(nct_id)
+
+        unified.append({
+            "nct_id": nct_id,
+            "phase": row.get("phase"),
+            "study_type": row.get("study_type"),
+            "status": row.get("status"),
+            "sponsor": row.get("sponsor"),
+            "enrollment": row.get("enrollment"),
+            "conditions": row.get("conditions"),
+            "interventions": row.get("interventions"),
+            "source_condition": row.get("source_condition"),
+
+            "operational_risk": row.get("target"),
+            "safety_risk": (
+                safety_row.get("target")
+                if safety_row is not None
+                else None
+            ),
+
+            # Placeholder for now.
+            "efficacy_risk": None,
+        })
+
+    return unified
+
 if __name__ == "__main__":
     conditions = [
         "autism",
@@ -176,114 +276,78 @@ if __name__ == "__main__":
         "parkinsons",
     ]
 
-    # ------------------------------------------------------------
-    # Operational risk benchmark
-    # Uses processed normalized Trial objects.
-    # ------------------------------------------------------------
-
     operational_examples = []
-
-    for condition in conditions:
-        filename = f"{condition}_trials.json"
-
-        try:
-            trials = load_processed_trials(filename)
-        except FileNotFoundError:
-            print(f"Skipping operational benchmark for {condition}")
-            continue
-
-        benchmark = build_operational_risk_benchmark(trials)
-
-        for row in benchmark:
-            row["source_condition"] = condition
-
-        operational_examples.extend(benchmark)
-
-    operational_output_path = save_benchmark(
-        operational_examples,
-        "operational_risk_multi_condition.json",
-    )
-
-    operational_metadata_path = save_benchmark_metadata(
-        operational_examples,
-        "operational_risk_multi_condition_metadata.json",
-        task_name="operational_risk",
-    )
-
-    n_operational_positive = sum(
-        row["target"] == 1
-        for row in operational_examples
-    )
-
-    print("\nOperational risk benchmark")
-    print(f"Saved benchmark to: {operational_output_path}")
-    print(f"Saved metadata to: {operational_metadata_path}")
-    print(f"Examples: {len(operational_examples)}")
-    print(f"High risk: {n_operational_positive}")
-    print(
-        f"Low risk: "
-        f"{len(operational_examples) - n_operational_positive}"
-    )
-
-    if operational_examples:
-        print(
-            f"Positive ratio: "
-            f"{n_operational_positive / len(operational_examples):.2%}"
-        )
-
-    # ------------------------------------------------------------
-    # Safety risk benchmark
-    # Uses raw ClinicalTrials.gov studies with posted results.
-    # ------------------------------------------------------------
-
     safety_examples = []
 
     for condition in conditions:
-        filename = f"{condition}_raw_trials.json"
+        processed_filename = f"{condition}_trials.json"
+        raw_filename = f"{condition}_raw_trials.json"
 
         try:
-            raw_data = load_raw_trials(filename)
+            trials = load_processed_trials(processed_filename)
+
+            benchmark = build_operational_risk_benchmark(trials)
+
+            for row in benchmark:
+                row["source_condition"] = condition
+
+            operational_examples.extend(benchmark)
+
         except FileNotFoundError:
-            print(f"Skipping safety benchmark for {condition}")
-            continue
+            print(f"Skipping operational labels for {condition}")
 
-        benchmark = build_safety_risk_benchmark(
-            raw_data.get("studies", [])
-        )
+        try:
+            raw_data = load_raw_trials(raw_filename)
 
-        for row in benchmark:
-            row["source_condition"] = condition
+            benchmark = build_safety_risk_benchmark(
+                raw_data.get("studies", [])
+            )
 
-        safety_examples.extend(benchmark)
+            for row in benchmark:
+                row["source_condition"] = condition
 
-    safety_output_path = save_benchmark(
+            safety_examples.extend(benchmark)
+
+        except FileNotFoundError:
+            print(f"Skipping safety labels for {condition}")
+
+    unified_examples = build_unified_risk_benchmark(
+        operational_examples,
         safety_examples,
-        "safety_risk_multi_condition.json",
     )
 
-    safety_metadata_path = save_benchmark_metadata(
-        safety_examples,
-        "safety_risk_multi_condition_metadata.json",
-        task_name="safety_risk",
+    output_path = save_benchmark(
+        unified_examples,
+        "unified_risk_multi_condition.json",
     )
 
-    n_safety_positive = sum(
-        row["target"] == 1
-        for row in safety_examples
+    metadata_path = save_unified_benchmark_metadata(
+        unified_examples,
+        "unified_risk_multi_condition_metadata.json",
     )
 
-    print("\nSafety risk benchmark")
-    print(f"Saved benchmark to: {safety_output_path}")
-    print(f"Saved metadata to: {safety_metadata_path}")
-    print(f"Examples: {len(safety_examples)}")
-    print(f"High risk: {n_safety_positive}")
-    print(f"Low risk: {len(safety_examples) - n_safety_positive}")
+    print("\nUnified risk benchmark")
+    print(f"Saved benchmark to: {output_path}")
+    print(f"Saved metadata to: {metadata_path}")
+    print(f"Examples: {len(unified_examples)}")
 
-    if safety_examples:
-        print(
-            f"Positive ratio: "
-            f"{n_safety_positive / len(safety_examples):.2%}"
-        )
+    for risk_type in [
+        "operational_risk",
+        "safety_risk",
+        "efficacy_risk",
+    ]:
+        valid_rows = [
+            row for row in unified_examples
+            if row.get(risk_type) is not None
+        ]
 
+        positives = sum(row[risk_type] == 1 for row in valid_rows)
 
+        print(f"\n{risk_type}")
+        print(f"Valid examples: {len(valid_rows)}")
+        print(f"High risk: {positives}")
+        print(f"Low risk: {len(valid_rows) - positives}")
+
+        if valid_rows:
+            print(f"Positive ratio: {positives / len(valid_rows):.2%}")
 

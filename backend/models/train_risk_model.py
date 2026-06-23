@@ -36,23 +36,37 @@ def get_benchmark_path(benchmark_name: str) -> Path:
 
 
 def train_risk_model(
+    data: list[dict],
     benchmark_name: str,
+    risk_type: str,
     model_name: str,
 ):
     """
-    Train a baseline logistic regression model to predict
-    operational risk.
+    Train a baseline model for a selected risk label from a unified
+    benchmark.
     """
 
-    # Load benchmark dataset
-    benchmark_path = get_benchmark_path(
-        benchmark_name
-    )
+    allowed_risk_types = {
+        "operational_risk",
+        "safety_risk",
+        "efficacy_risk",
+    }
 
-    with benchmark_path.open("r", encoding="utf-8",) as f:
-        data = json.load(f)
+    if risk_type not in allowed_risk_types:
+        raise ValueError(f"Unsupported risk type: {risk_type}")
 
     df = pd.DataFrame(data)
+
+    # Keep only rows where this selected label exists
+    df = df[df[risk_type].notna()].copy()
+
+    if df.empty:
+        raise ValueError(f"No valid labels for {risk_type}")
+
+    if df[risk_type].nunique() < 2:
+        raise ValueError(
+            f"Cannot train {risk_type}: only one class present"
+        )
 
     def list_to_text(value):
         if isinstance(value, list):
@@ -64,7 +78,6 @@ def train_risk_model(
     df["conditions_text"] = df["conditions"].apply(list_to_text)
     df["interventions_text"] = df["interventions"].apply(list_to_text)
 
-    # Initial hand-crafted feature set
     features = [
         "phase",
         "study_type",
@@ -75,7 +88,7 @@ def train_risk_model(
     ]
 
     X = df[features]
-    y = df["target"]
+    y = df[risk_type].astype(int)
 
     categorical_features = [
         "phase",
@@ -87,22 +100,18 @@ def train_risk_model(
         "enrollment",
     ]
 
-    text_features = [
-        "conditions_text",
-        "interventions_text",
-    ]
-
-    # Preprocessing pipeline:
-    # - fill missing values
-    # - one-hot encode categorical variables
     preprocessor = ColumnTransformer(
         transformers=[
             (
                 "cat",
                 Pipeline(
                     steps=[
-                        ("imputer", SimpleImputer(strategy="most_frequent")),
-                        ("encoder", OneHotEncoder(handle_unknown="ignore")),
+                        ("imputer", SimpleImputer(
+                            strategy="most_frequent"
+                        )),
+                        ("encoder", OneHotEncoder(
+                            handle_unknown="ignore"
+                        )),
                     ]
                 ),
                 categorical_features,
@@ -136,9 +145,7 @@ def train_risk_model(
             ),
         ]
     )
-    # Baseline model:
-    # use class balancing because the dataset is imbalanced
-    # Select classifier
+
     if model_name == "logistic_regression":
         classifier = LogisticRegression(
             class_weight="balanced",
@@ -164,7 +171,6 @@ def train_risk_model(
     else:
         raise ValueError(f"Unsupported model: {model_name}")
 
-    # Build full pipeline
     model = Pipeline(
         steps=[
             ("preprocessor", preprocessor),
@@ -172,7 +178,6 @@ def train_risk_model(
         ]
     )
 
-    # Preserve class distribution in train/test sets
     X_train, X_test, y_train, y_test = train_test_split(
         X,
         y,
@@ -181,18 +186,17 @@ def train_risk_model(
         random_state=42,
     )
 
-    # Train model
     model.fit(X_train, y_train)
 
-    # Evaluate on held-out data
     y_pred = model.predict(X_test)
-
     y_proba = model.predict_proba(X_test)[:, 1]
 
     tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
 
     return {
-        "model": "logistic_regression",
+        "benchmark": benchmark_name,
+        "risk_type": risk_type,
+        "model": model_name,
         "precision": precision_score(y_test, y_pred),
         "recall": recall_score(y_test, y_pred),
         "f1": f1_score(y_test, y_pred),

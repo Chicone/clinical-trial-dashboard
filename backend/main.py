@@ -1,5 +1,6 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
 
 from ct_io.clinicaltrials_api import fetch_trials
 from pipelines.preprocessing_pipeline import flatten_trials
@@ -14,10 +15,13 @@ import json
 from pydantic import BaseModel
 from pipelines.benchmark_pipeline import (
     build_operational_risk_benchmark,
+    build_safety_risk_benchmark,
+    build_unified_risk_benchmark,
     save_benchmark,
-    save_benchmark_metadata,
+    save_unified_benchmark_metadata,
 )
 from models.train_risk_model import train_risk_model
+from routers import benchmarks
 
 app = FastAPI(title="Clinical Trial Dashboard API")
 
@@ -29,6 +33,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(benchmarks.router)
+
 class BenchmarkGenerationRequest(BaseModel):
     task: str = "operational_risk"
     conditions: list[str]
@@ -37,13 +43,8 @@ class BenchmarkGenerationRequest(BaseModel):
 
 @app.post("/benchmarks/generate")
 def generate_benchmark(request: BenchmarkGenerationRequest):
-    if request.task != "operational_risk":
-        return {
-            "success": False,
-            "message": "Only operational_risk is supported for now.",
-        }
-
-    all_examples = []
+    operational_examples = []
+    safety_examples = []
 
     for condition in request.conditions:
         raw = fetch_trials(
@@ -63,37 +64,60 @@ def generate_benchmark(request: BenchmarkGenerationRequest):
             filename=f"{condition}_metadata.json",
         )
 
-        benchmark = build_operational_risk_benchmark(
+        operational_benchmark = build_operational_risk_benchmark(
             [trial.model_dump() for trial in trials]
         )
 
-        for row in benchmark:
+        for row in operational_benchmark:
             row["source_condition"] = condition
 
-        all_examples.extend(benchmark)
+        operational_examples.extend(operational_benchmark)
+
+        safety_benchmark = build_safety_risk_benchmark(
+            raw.get("studies", [])
+        )
+
+        for row in safety_benchmark:
+            row["source_condition"] = condition
+
+        safety_examples.extend(safety_benchmark)
+
+    unified_examples = build_unified_risk_benchmark(
+        operational_examples,
+        safety_examples,
+    )
 
     output_path = save_benchmark(
-        all_examples,
-        "operational_risk_multi_condition.json",
+        unified_examples,
+        "unified_risk_multi_condition.json",
     )
 
-    metadata_path = save_benchmark_metadata(
-        all_examples,
-        "operational_risk_multi_condition_metadata.json",
-        task_name="operational_risk",
+    metadata_path = save_unified_benchmark_metadata(
+        unified_examples,
+        "unified_risk_multi_condition_metadata.json",
     )
 
-    n_positive = sum(row["target"] == 1 for row in all_examples)
-    n_examples = len(all_examples)
-    n_negative = n_examples - n_positive
+    operational_valid = [
+        row for row in unified_examples
+        if row.get("operational_risk") is not None
+    ]
+
+    operational_positive = sum(
+        row["operational_risk"] == 1
+        for row in operational_valid
+    )
 
     return {
         "success": True,
-        "task": request.task,
-        "n_examples": n_examples,
-        "n_positive": n_positive,
-        "n_negative": n_negative,
-        "positive_ratio": n_positive / n_examples if n_examples else 0,
+        "task": "unified_risk",
+        "n_examples": len(unified_examples),
+        "n_positive": operational_positive,
+        "n_negative": len(operational_valid) - operational_positive,
+        "positive_ratio": (
+            operational_positive / len(operational_valid)
+            if operational_valid
+            else 0
+        ),
         "source_conditions": request.conditions,
         "benchmark_path": str(output_path),
         "metadata_path": str(metadata_path),
@@ -148,7 +172,7 @@ def get_risk_benchmark_overview():
         / "data"
         / "benchmarks"
         / "v0_1"
-        / "operational_risk_multi_condition_metadata.json"
+        / "unified_risk_multi_condition_metadata.json"
     )
 
     operational = {
@@ -199,19 +223,70 @@ def get_risk_benchmark_overview():
 
 class ModelTrainingRequest(BaseModel):
     benchmark: str
+    risk_type: str
     model: str
+
+
+from pathlib import Path
+import json
+
+BENCHMARK_DIR = Path("data/benchmarks/v0_1")
 
 
 @app.post("/models/train")
 def train_model(request: ModelTrainingRequest):
+    benchmark_path = BENCHMARK_DIR / f"{request.benchmark}.json"
 
-    results = train_risk_model(
-        request.benchmark,
-        request.model,
-    )
+    if not benchmark_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Benchmark not found: {request.benchmark}",
+        )
 
-    return {
-        "success": True,
-        **results,
+    with benchmark_path.open("r", encoding="utf-8") as f:
+        benchmark_data = json.load(f)
+
+    allowed_risk_types = {
+        "operational_risk",
+        "safety_risk",
+        "efficacy_risk",
     }
+
+    if request.risk_type not in allowed_risk_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid risk type: {request.risk_type}",
+        )
+
+    rows = [
+        row for row in benchmark_data
+        if row.get(request.risk_type) is not None
+    ]
+
+    if not rows:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"No valid labels found for risk type: "
+                f"{request.risk_type}"
+            ),
+        )
+
+    labels = {row[request.risk_type] for row in rows}
+
+    if len(labels) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Cannot train {request.risk_type}: "
+                f"only one class is present: {labels}"
+            ),
+        )
+
+    return train_risk_model(
+        data=rows,
+        benchmark_name=request.benchmark,
+        risk_type=request.risk_type,
+        model_name=request.model,
+    )
 
